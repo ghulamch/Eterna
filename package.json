@@ -1,0 +1,57 @@
+{
+  "name": "photo-auto-uploader",
+  "version": "1.0.0",
+  "description": "Auto upload photos to Laravel API",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder build --win --publish never",
+    "build-all": "electron-builder build -mwl"
+  },
+  "keywords": [
+    "photo",
+    "upload",
+    "automation"
+  ],
+  "author": "Ghulamin Chalim Alwi",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3",
+    "electron-rebuild": "^3.2.9"
+  },
+  "dependencies": {
+    "axios": "^1.13.2",
+    "chokidar": "^3.5.1",
+    "electron-store": "^4.0.0",
+    "form-data": "^4.0.4",
+    "fs-extra": "^11.3.2",
+    "node-fetch": "^2.7.0"
+  },
+  "build": {
+    "appId": "id.my.ghulam.eterna",
+    "productName": "Eterna Photo Auto Uploader",
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "files": [
+      "**/*",
+      "!**/*.md",
+      "!.git",
+      "node_modules/**/*"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/chokidar/**/*"
+    ]
+  }
+}
