@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photo Auto Uploader</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>Photo Auto Uploader - Laravel Compatible</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>
-                <img class="icon" src="assets/logo.png" alt="Camera Icon" style="width: 80px;">
-                Eterna Photo Auto Uploader
+                <span class="icon">📸</span>
+                Photo Auto Uploader
             </h1>
-            <p>Otomatis upload foto dari folder lokal ke server Eterna</p>
+            <p>Upload otomatis foto ke Laravel API - Laravel Compatible</p>
             <span class="status-badge status-inactive" id="statusBadge">
                 <span class="status-dot"></span>
                 Monitoring Tidak Aktif
@@ -23,48 +23,62 @@
         </div>
 
         <div class="main-content">
+            <!-- Pengaturan Folder -->
             <div class="card">
-                <h2><i class="fa-solid fa-gear"></i> Pengaturan Folder</h2>
+                <h2><i class="fa-solid fa-folder-open"></i> Pengaturan Folder</h2>
                 
                 <div class="form-group">
                     <label>Folder yang Dipantau</label>
                     <div class="folder-display empty" id="watchFolderDisplay">Belum ada folder dipilih</div>
                     <button class="btn btn-primary" id="selectFolderBtn">
-                        📁 Pilih Folder
+                        <i class="fa-solid fa-folder"></i> Pilih Folder
                     </button>
                 </div>
 
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-number" id="totalFiles">0</div>
-                        <div class="stat-label">Total File</div>
+                        <div class="stat-label">Total Upload</div>
                     </div>
-                    <div class="stat-card">
+                    <div class="stat-card stat-success">
                         <div class="stat-number" id="uploadedCount">0</div>
-                        <div class="stat-label">Berhasil Upload</div>
+                        <div class="stat-label">Berhasil</div>
+                    </div>
+                    <div class="stat-card queue-badge">
+                        <div class="stat-number" id="queueSize">0</div>
+                        <div class="stat-label">Antrian</div>
                     </div>
                 </div>
 
                 <button class="btn btn-secondary" id="resetBtn">
-                    🔄 Reset History Upload
+                    <i class="fa-solid fa-rotate-right"></i> Reset History
                 </button>
             </div>
 
+            <!-- Pengaturan API -->
             <div class="card">
-                <h2><i class="fa-solid fa-globe"></i> Pengaturan API Server</h2>
+                <h2><i class="fa-solid fa-server"></i> Pengaturan Laravel API</h2>
                 
                 <div class="form-group">
-                    <label>API URL</label>
-                    <input type="text" id="apiUrl" placeholder="https://api.example.com/api/upload-photo" value="http://localhost:8000/api/upload-photo">
+                    <label>API URL <span class="label-required">*</span></label>
+                    <input type="text" id="apiUrl" placeholder="http://localhost:8000/api/photos/upload" value="http://localhost:8000/api/photos/upload">
+                    <small class="form-hint">Endpoint Laravel untuk upload foto</small>
                 </div>
 
                 <div class="form-group">
-                    <label>Bearer Token <span style="color: #94a3b8; font-weight: 400;">(Opsional)</span></label>
-                    <input type="text" id="apiToken" placeholder="Masukkan token jika diperlukan">
+                    <label>Bearer Token <span class="label-optional">(Opsional)</span></label>
+                    <input type="password" id="apiToken" placeholder="Masukkan token autentikasi">
+                    <small class="form-hint">Generate token di Laravel dengan tinker</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Session Code <span class="label-optional">(Opsional)</span></label>
+                    <input type="text" id="sessionCode" placeholder="EVENT_001 atau kosongkan untuk auto-generate">
+                    <small class="form-hint">Kosongkan untuk auto-generate berdasarkan timestamp</small>
                 </div>
 
                 <div class="btn-group">
-                    <button class="btn btn-success" id="startBtn">
+                    <button class="btn btn-success" id="startBtn" disabled>
                         <i class="fa-solid fa-play"></i> Mulai
                     </button>
                     <button class="btn btn-danger" id="stopBtn" disabled>
@@ -73,12 +87,56 @@
                 </div>
             </div>
 
+            <!-- Info & Tips -->
+            <div class="card">
+                <h2><i class="fa-solid fa-circle-info"></i> Laravel API Setup</h2>
+                
+                <div class="info-section">
+                    <div class="info-item">
+                        <div class="info-number">1</div>
+                        <div class="info-text">
+                            <strong>Pastikan Laravel Running</strong>
+                            <p><code>php artisan serve</code></p>
+                        </div>
+                    </div>
+                    
+                    <div class="info-item">
+                        <div class="info-number">2</div>
+                        <div class="info-text">
+                            <strong>Generate API Token</strong>
+                            <p><code>php artisan tinker</code><br>
+                            <code>$token = App\Models\ApiToken::generate('Token');</code><br>
+                            <code>echo $token->token;</code></p>
+                        </div>
+                    </div>
+                    
+                    <div class="info-item">
+                        <div class="info-number">3</div>
+                        <div class="info-text">
+                            <strong>Test API</strong>
+                            <p>Upload akan otomatis ke <code>/api/photos/upload</code></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tips-box">
+                    <h3><i class="fa-solid fa-lightbulb"></i> Tips</h3>
+                    <ul>
+                        <li>API URL default: <code>http://localhost:8000/api/photos/upload</code></li>
+                        <li>Session code auto-generate jika kosong</li>
+                        <li>Token optional untuk testing, wajib untuk production</li>
+                        <li>Check Laravel logs jika error: <code>storage/logs/laravel.log</code></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Log Aktivitas -->
             <div class="card full-width">
-                <h2><i class="fa-solid fa-newspaper"></i> Log Aktivitas</h2>
+                <h2><i class="fa-solid fa-list-check"></i> Log Aktivitas</h2>
                 <div class="log-container" id="logContainer">
                     <div class="log-item log-info">
                         <span>ℹ️</span>
-                        <span><strong>Aplikasi siap digunakan.</strong> Pilih folder dan mulai monitoring untuk auto-upload foto.</span>
+                        <span><strong>Aplikasi siap digunakan.</strong> Pastikan Laravel backend sudah running di <code>http://localhost:8000</code></span>
                     </div>
                 </div>
             </div>

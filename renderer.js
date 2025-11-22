@@ -11,9 +11,11 @@ const watchFolderDisplay = document.getElementById('watchFolderDisplay');
 const statusBadge = document.getElementById('statusBadge');
 const totalFilesEl = document.getElementById('totalFiles');
 const uploadedCountEl = document.getElementById('uploadedCount');
+const queueSizeEl = document.getElementById('queueSize');
 const logContainer = document.getElementById('logContainer');
 const apiUrlInput = document.getElementById('apiUrl');
 const apiTokenInput = document.getElementById('apiToken');
+const sessionCodeInput = document.getElementById('sessionCode');
 
 // Format waktu untuk log
 function getTimeString() {
@@ -50,9 +52,9 @@ function addLogMessage(type, message) {
     // Tambah log baru di atas
     logContainer.insertBefore(logItem, logContainer.firstChild);
     
-    // Batasi jumlah log (max 50)
+    // Batasi jumlah log (max 100)
     const logItems = logContainer.querySelectorAll('.log-item');
-    if (logItems.length > 50) {
+    if (logItems.length > 100) {
         logItems[logItems.length - 1].remove();
     }
 }
@@ -75,9 +77,20 @@ function updateStatusBadge(active) {
 }
 
 // Update statistik
-function updateStats(totalFiles, uploadedCount) {
-    totalFilesEl.textContent = totalFiles;
-    uploadedCountEl.textContent = uploadedCount;
+function updateStats(totalFiles, uploadedCount, queueSize = 0) {
+    totalFilesEl.textContent = totalFiles || 0;
+    uploadedCountEl.textContent = uploadedCount || 0;
+    queueSizeEl.textContent = queueSize || 0;
+    
+    // Update warna badge queue
+    const queueBadge = document.querySelector('.queue-badge');
+    if (queueBadge) {
+        if (queueSize > 0) {
+            queueBadge.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
+        } else {
+            queueBadge.style.background = 'linear-gradient(135deg, #64748b 0%, #475569 100%)';
+        }
+    }
 }
 
 // Update folder display
@@ -101,12 +114,14 @@ function toggleButtons(monitoring) {
         selectFolderBtn.disabled = true;
         apiUrlInput.disabled = true;
         apiTokenInput.disabled = true;
+        sessionCodeInput.disabled = true;
     } else {
         startBtn.disabled = !selectedFolder;
         stopBtn.disabled = true;
         selectFolderBtn.disabled = false;
         apiUrlInput.disabled = false;
         apiTokenInput.disabled = false;
+        sessionCodeInput.disabled = false;
     }
     
     updateStatusBadge(monitoring);
@@ -120,10 +135,8 @@ selectFolderBtn.addEventListener('click', async () => {
         if (result.success) {
             selectedFolder = result.folderPath;
             updateFolderDisplay(selectedFolder);
-            updateStats(result.totalFiles, result.uploadedCount);
+            updateStats(result.totalFiles, result.uploadedCount, result.queueSize);
             addLogMessage('success', `Folder berhasil dipilih: ${selectedFolder}`);
-            
-            // Enable start button
             startBtn.disabled = false;
         }
     } catch (error) {
@@ -148,15 +161,18 @@ startBtn.addEventListener('click', async () => {
     
     try {
         const apiToken = apiTokenInput.value.trim();
+        const sessionCode = sessionCodeInput.value.trim();
         
         const result = await window.electronAPI.startMonitoring({
+            watchFolder: selectedFolder,
             apiUrl,
-            apiToken
+            apiToken,
+            sessionCode
         });
         
         if (result.success) {
             toggleButtons(true);
-            updateStats(result.totalFiles, result.uploadedCount);
+            updateStats(result.totalFiles, result.uploadedCount, result.queueSize);
             addLogMessage('success', 'Monitoring dimulai! Aplikasi akan otomatis upload foto baru.');
         } else {
             addLogMessage('error', result.message);
@@ -173,7 +189,11 @@ stopBtn.addEventListener('click', async () => {
         
         if (result.success) {
             toggleButtons(false);
-            addLogMessage('info', 'Monitoring dihentikan.');
+            addLogMessage('info', 'Monitoring dihentikan. Antrian dibersihkan.');
+            
+            // Update stats
+            const stats = await window.electronAPI.getStats();
+            updateStats(stats.totalFiles, stats.uploadedCount, 0);
         } else {
             addLogMessage('error', result.message);
         }
@@ -192,7 +212,7 @@ resetBtn.addEventListener('click', async () => {
         const result = await window.electronAPI.resetHistory();
         
         if (result.success) {
-            updateStats(result.totalFiles, result.uploadedCount);
+            updateStats(result.totalFiles, result.uploadedCount, result.queueSize);
             addLogMessage('success', 'History upload berhasil direset!');
         } else {
             addLogMessage('error', result.message);
@@ -209,20 +229,20 @@ window.electronAPI.onLogMessage((data) => {
 
 // Listen untuk update stats dari main process
 window.electronAPI.onUpdateStats((data) => {
-    updateStats(data.totalFiles, data.uploadedCount);
+    updateStats(data.totalFiles, data.uploadedCount, data.queueSize);
 });
 
 // Load stats saat aplikasi dibuka
 window.addEventListener('DOMContentLoaded', async () => {
     try {
         const stats = await window.electronAPI.getStats();
-        updateStats(stats.totalFiles, stats.uploadedCount);
+        updateStats(stats.totalFiles, stats.uploadedCount, stats.queueSize);
     } catch (error) {
-        console.error('Error loading stats:', error);
+        console.error('Error loading initial data:', error);
     }
 });
 
-// Simpan API URL ke localStorage
+// Simpan konfigurasi ke localStorage
 apiUrlInput.addEventListener('change', () => {
     localStorage.setItem('apiUrl', apiUrlInput.value);
 });
@@ -231,10 +251,15 @@ apiTokenInput.addEventListener('change', () => {
     localStorage.setItem('apiToken', apiTokenInput.value);
 });
 
+sessionCodeInput.addEventListener('change', () => {
+    localStorage.setItem('sessionCode', sessionCodeInput.value);
+});
+
 // Load dari localStorage
 window.addEventListener('DOMContentLoaded', () => {
     const savedApiUrl = localStorage.getItem('apiUrl');
     const savedApiToken = localStorage.getItem('apiToken');
+    const savedSessionCode = localStorage.getItem('sessionCode');
     
     if (savedApiUrl) {
         apiUrlInput.value = savedApiUrl;
@@ -243,4 +268,21 @@ window.addEventListener('DOMContentLoaded', () => {
     if (savedApiToken) {
         apiTokenInput.value = savedApiToken;
     }
+    
+    if (savedSessionCode) {
+        sessionCodeInput.value = savedSessionCode;
+    }
 });
+
+// Update queue status setiap 2 detik
+setInterval(async () => {
+    if (isMonitoring) {
+        try {
+            const queueStatus = await window.electronAPI.getQueueStatus();
+            const stats = await window.electronAPI.getStats();
+            updateStats(stats.totalFiles, stats.uploadedCount, queueStatus.queueSize);
+        } catch (error) {
+            console.error('Error updating queue status:', error);
+        }
+    }
+}, 2000);

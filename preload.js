@@ -17,6 +17,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Get statistik
     getStats: () => ipcRenderer.invoke('get-stats'),
     
+    // Get queue status
+    getQueueStatus: () => ipcRenderer.invoke('get-queue-status'),
+    
     // Listen untuk log messages
     onLogMessage: (callback) => {
         ipcRenderer.on('log-message', (event, data) => callback(data));
