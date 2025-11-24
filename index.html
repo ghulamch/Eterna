@@ -87,45 +87,51 @@
                 </div>
             </div>
 
-            <!-- Info & Tips -->
             <div class="card">
-                <h2><i class="fa-solid fa-circle-info"></i> Laravel API Setup</h2>
+                <h2><i class="fa-solid fa-circle-info"></i> Cara Menggunakan Aplikasi</h2>
                 
                 <div class="info-section">
                     <div class="info-item">
                         <div class="info-number">1</div>
                         <div class="info-text">
-                            <strong>Pastikan Laravel Running</strong>
-                            <p><code>php artisan serve</code></p>
+                            <strong>Pilih Folder yang Akan Dipantau</strong>
+                            <p>Klik tombol "Pilih Folder" dan pilih folder tempat foto-foto akan disimpan (misalnya folder DCIM dari kamera)</p>
                         </div>
                     </div>
                     
                     <div class="info-item">
                         <div class="info-number">2</div>
                         <div class="info-text">
-                            <strong>Generate API Token</strong>
-                            <p><code>php artisan tinker</code><br>
-                            <code>$token = App\Models\ApiToken::generate('Token');</code><br>
-                            <code>echo $token->token;</code></p>
+                            <strong>Atur Konfigurasi API</strong>
+                            <p>Masukkan API URL server Anda. Jika diperlukan, tambahkan Bearer Token dan Session Code untuk identifikasi</p>
                         </div>
                     </div>
                     
                     <div class="info-item">
                         <div class="info-number">3</div>
                         <div class="info-text">
-                            <strong>Test API</strong>
-                            <p>Upload akan otomatis ke <code>/api/photos/upload</code></p>
+                            <strong>Mulai Monitoring</strong>
+                            <p>Klik tombol "Mulai" untuk mengaktifkan monitoring otomatis. Setiap foto baru yang ditambahkan ke folder akan otomatis terupload</p>
+                        </div>
+                    </div>
+                    
+                    <div class="info-item">
+                        <div class="info-number">4</div>
+                        <div class="info-text">
+                            <strong>Monitor Proses Upload</strong>
+                            <p>Pantau log aktivitas. Foto akan diupload otomatis satu per satu ke server</p>
                         </div>
                     </div>
                 </div>
 
                 <div class="tips-box">
-                    <h3><i class="fa-solid fa-lightbulb"></i> Tips</h3>
+                    <h3><i class="fa-solid fa-lightbulb"></i> Tips Penggunaan</h3>
                     <ul>
-                        <li>API URL default: <code>http://localhost:8000/api/photos/upload</code></li>
-                        <li>Session code auto-generate jika kosong</li>
-                        <li>Token optional untuk testing, wajib untuk production</li>
-                        <li>Check Laravel logs jika error: <code>storage/logs/laravel.log</code></li>
+                        <li>Pastikan Laravel backend sudah running sebelum memulai</li>
+                        <li>Session code akan auto-generate jika dikosongkan</li>
+                        <li>Gunakan "Reset History" untuk membersihkan data statistik</li>
+                        <li>Klik "Stop" jika ingin menghentikan monitoring sementara</li>
+                        <li>Format foto yang didukung: JPG, JPEG, PNG, GIF, WEBP</li>
                     </ul>
                 </div>
             </div>
