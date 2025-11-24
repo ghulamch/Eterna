@@ -1,12 +1,12 @@
 {
-  "name": "photo-uploader-simple",
+  "name": "photo-uploader",
   "version": "3.0.0",
-  "description": "Photo Auto Uploader - Simple & Fast (No Face Recognition)",
+  "description": "Photo Auto Uploader",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "build:win": "electron-builder --win",
+    "build": "electron-builder",
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux"
   },
@@ -18,7 +18,7 @@
     "simple",
     "fast"
   ],
-  "author": "Photo Uploader Simple",
+  "author": "Ghulam",
   "license": "MIT",
   "dependencies": {
     "axios": "^1.6.2",
@@ -30,8 +30,8 @@
     "electron-builder": "^24.9.1"
   },
   "build": {
-    "appId": "com.photouploader.simple",
-    "productName": "Photo Uploader Simple",
+    "appId": "id.my.ghulam.eterna",
+    "productName": "Eternal Photo Uploader",
     "directories": {
       "output": "dist"
     },
