@@ -30,8 +30,8 @@
     "electron-builder": "^24.9.1"
   },
   "build": {
-    "appId": "id.my.ghulam.eterna",
-    "productName": "Eterna Photo Uploader",
+    "appId": "id.my.ghulam.memora",
+    "productName": "Memora Photo Uploader",
     "directories": {
       "output": "dist"
     },
