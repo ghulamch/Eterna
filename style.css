@@ -517,6 +517,45 @@ body::before {
     color: #424242;
 }
 
+.alert {
+    padding: 16px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.alert i {
+    font-size: 20px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.alert-info {
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.15), rgba(25, 118, 210, 0.2));
+    border: 1px solid rgba(33, 150, 243, 0.3);
+    color: #0D47A1;
+}
+
+.alert-info i {
+    color: #1976D2;
+}
+
+.alert strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 14px;
+}
+
+.alert p {
+    font-size: 13px;
+    margin: 0;
+    line-height: 1.6;
+}
+
 .empty-state {
     text-align: center;
     color: #7A7A7A;

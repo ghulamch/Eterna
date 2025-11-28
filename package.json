@@ -1,6 +1,6 @@
 {
   "name": "photo-uploader",
-  "version": "3.0.0",
+  "version": "1.1.5",
   "description": "Photo Auto Uploader",
   "main": "main.js",
   "scripts": {
@@ -31,7 +31,7 @@
   },
   "build": {
     "appId": "id.my.ghulam.eterna",
-    "productName": "Eternal Photo Uploader",
+    "productName": "Eterna Photo Uploader",
     "directories": {
       "output": "dist"
     },
@@ -57,7 +57,7 @@
       "category": "public.app-category.utilities"
     },
     "linux": {
-      "target": "AppImage",
+      "target": ["AppImage", "deb", "rpm"],
       "icon": "icon.png",
       "category": "Utility"
     },

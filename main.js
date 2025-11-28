@@ -1,6 +1,7 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const chokidar = require('chokidar');
 const axios = require('axios');
 const FormData = require('form-data');
@@ -10,16 +11,20 @@ const CONFIG = {
     maxRetries: 3,
     retryDelay: 3000,
     retryMultiplier: 1.5,
-    concurrentUploads: 1
+    concurrentUploads: 1,
+    scanInterval: 30000, // Scan setiap 30 detik
+    dbPath: path.join(app.getPath('userData'), 'upload-queue.json')
 };
 
 // State
 let mainWindow;
+let tray = null;
 let watcher = null;
 let uploadQueue = [];
 let uploadedFiles = new Set();
 let isProcessing = false;
-let currentSessionCode = null; // Track current session code
+let currentSessionCode = null;
+let scanIntervalId = null;
 let stats = {
     totalFiles: 0,
     uploadedCount: 0,
@@ -32,6 +37,258 @@ let config = {
     apiToken: null
 };
 
+// ============================================
+// PERSISTENT DATABASE FUNCTIONS
+// ============================================
+
+// Load queue dan uploaded files dari database
+async function loadDatabase() {
+    try {
+        if (fsSync.existsSync(CONFIG.dbPath)) {
+            const data = await fs.readFile(CONFIG.dbPath, 'utf8');
+            const db = JSON.parse(data);
+            
+            uploadQueue = db.uploadQueue || [];
+            uploadedFiles = new Set(db.uploadedFiles || []);
+            stats = db.stats || { totalFiles: 0, uploadedCount: 0, failedCount: 0 };
+            config = { ...config, ...db.config };
+            currentSessionCode = db.currentSessionCode || null;
+            
+            sendLog('info', `📂 Loaded ${uploadQueue.length} items from queue, ${uploadedFiles.size} uploaded files`);
+            
+            // Auto-start jika ada config yang tersimpan
+            if (config.watchFolder && config.apiUrl && uploadQueue.length > 0) {
+                sendLog('info', '🔄 Auto-resuming monitoring from saved state...');
+                setTimeout(() => startMonitoring(), 2000);
+            }
+        }
+    } catch (error) {
+        sendLog('error', `Error loading database: ${error.message}`);
+    }
+}
+
+// Save queue dan uploaded files ke database
+async function saveDatabase() {
+    try {
+        const db = {
+            uploadQueue,
+            uploadedFiles: Array.from(uploadedFiles),
+            stats,
+            config,
+            currentSessionCode,
+            lastSaved: new Date().toISOString()
+        };
+        
+        await fs.writeFile(CONFIG.dbPath, JSON.stringify(db, null, 2), 'utf8');
+    } catch (error) {
+        console.error('Error saving database:', error);
+    }
+}
+
+// Periodic save (setiap 10 detik)
+setInterval(() => {
+    if (uploadQueue.length > 0 || uploadedFiles.size > 0) {
+        saveDatabase();
+    }
+}, 10000);
+
+// ============================================
+// SYSTEM TRAY FUNCTIONS
+// ============================================
+
+function createTray() {
+    // Create tray icon (gunakan icon default dulu, bisa diganti dengan icon custom)
+    const icon = nativeImage.createFromPath(path.join(__dirname, 'icon.png')).resize({ width: 16, height: 16 });
+    tray = new Tray(icon);
+    
+    const contextMenu = Menu.buildFromTemplate([
+        {
+            label: 'Open Photo Uploader',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.show();
+                    mainWindow.focus();
+                } else {
+                    createWindow();
+                }
+            }
+        },
+        { type: 'separator' },
+        {
+            label: `Monitoring: ${watcher ? 'Active' : 'Inactive'}`,
+            enabled: false
+        },
+        {
+            label: `Queue: ${uploadQueue.length} files`,
+            enabled: false
+        },
+        {
+            label: `Uploaded: ${stats.uploadedCount} files`,
+            enabled: false
+        },
+        { type: 'separator' },
+        {
+            label: 'Start Monitoring',
+            click: () => {
+                if (config.watchFolder && config.apiUrl) {
+                    startMonitoring();
+                } else {
+                    sendLog('error', 'Configure folder and API first!');
+                }
+            },
+            enabled: !watcher
+        },
+        {
+            label: 'Stop Monitoring',
+            click: () => stopMonitoring(),
+            enabled: !!watcher
+        },
+        { type: 'separator' },
+        {
+            label: 'Quit',
+            click: () => {
+                app.isQuitting = true;
+                app.quit();
+            }
+        }
+    ]);
+    
+    tray.setToolTip('Photo Auto Uploader');
+    tray.setContextMenu(contextMenu);
+    
+    // Double click untuk show window
+    tray.on('double-click', () => {
+        if (mainWindow) {
+            mainWindow.show();
+            mainWindow.focus();
+        }
+    });
+}
+
+function updateTrayMenu() {
+    if (!tray) return;
+    
+    const contextMenu = Menu.buildFromTemplate([
+        {
+            label: 'Open Photo Uploader',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.show();
+                    mainWindow.focus();
+                } else {
+                    createWindow();
+                }
+            }
+        },
+        { type: 'separator' },
+        {
+            label: `Monitoring: ${watcher ? '✅ Active' : '❌ Inactive'}`,
+            enabled: false
+        },
+        {
+            label: `Queue: ${uploadQueue.length} files`,
+            enabled: false
+        },
+        {
+            label: `Uploaded: ${stats.uploadedCount} files`,
+            enabled: false
+        },
+        { type: 'separator' },
+        {
+            label: 'Start Monitoring',
+            click: () => startMonitoring(),
+            enabled: !watcher && config.watchFolder && config.apiUrl
+        },
+        {
+            label: 'Stop Monitoring',
+            click: () => stopMonitoring(),
+            enabled: !!watcher
+        },
+        { type: 'separator' },
+        {
+            label: 'Quit',
+            click: () => {
+                app.isQuitting = true;
+                app.quit();
+            }
+        }
+    ]);
+    
+    tray.setContextMenu(contextMenu);
+}
+
+// ============================================
+// PERIODIC FOLDER SCAN
+// ============================================
+
+async function scanFolder() {
+    if (!config.watchFolder) return;
+    
+    try {
+        const files = await fs.readdir(config.watchFolder);
+        let newFilesFound = 0;
+        
+        for (const fileName of files) {
+            if (!isImageFile(fileName)) continue;
+            
+            // Skip jika sudah pernah diupload atau sudah di queue
+            if (uploadedFiles.has(fileName)) continue;
+            if (uploadQueue.some(queuePath => path.basename(queuePath) === fileName)) continue;
+            
+            const filePath = path.join(config.watchFolder, fileName);
+            
+            // Check if file exists and is readable
+            try {
+                const stat = await fs.stat(filePath);
+                
+                // Skip jika file terlalu baru (< 2 detik, mungkin masih di-copy)
+                const fileAge = Date.now() - stat.mtimeMs;
+                if (fileAge < 2000) continue;
+                
+                // Add to queue
+                uploadQueue.push(filePath);
+                stats.totalFiles++;
+                newFilesFound++;
+                
+                sendLog('info', `🔍 Scan found new file: ${fileName}`);
+            } catch (error) {
+                // File tidak bisa diakses, skip
+                continue;
+            }
+        }
+        
+        if (newFilesFound > 0) {
+            sendLog('success', `✅ Scan complete: ${newFilesFound} new files added to queue`);
+            updateStats();
+            saveDatabase();
+            processQueue();
+        }
+    } catch (error) {
+        sendLog('error', `Scan error: ${error.message}`);
+    }
+}
+
+function startPeriodicScan() {
+    if (scanIntervalId) {
+        clearInterval(scanIntervalId);
+    }
+    
+    // Scan pertama kali
+    scanFolder();
+    
+    // Kemudian scan berkala
+    scanIntervalId = setInterval(scanFolder, CONFIG.scanInterval);
+    sendLog('info', `🔄 Periodic scan started (every ${CONFIG.scanInterval/1000}s)`);
+}
+
+function stopPeriodicScan() {
+    if (scanIntervalId) {
+        clearInterval(scanIntervalId);
+        scanIntervalId = null;
+        sendLog('info', '⏹️ Periodic scan stopped');
+    }
+}
+
 // Create main window
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -42,24 +299,64 @@ function createWindow() {
             contextIsolation: true,
             preload: path.join(__dirname, 'preload.js')
         },
-        backgroundColor: '#E8E8E8'
+        backgroundColor: '#E8E8E8',
+        icon: path.join(__dirname, 'icon.png')
     });
 
     mainWindow.loadFile('index.html');
+    
+    // Handle close event - minimize to tray instead of quit
+    mainWindow.on('close', (event) => {
+        if (!app.isQuitting) {
+            event.preventDefault();
+            mainWindow.hide();
+            
+            // Show notification pertama kali
+            if (!mainWindow.hasShownTrayNotification) {
+                sendLog('info', '📌 App minimized to system tray. Monitoring continues in background.');
+                mainWindow.hasShownTrayNotification = true;
+            }
+            
+            return false;
+        }
+    });
+    
+    mainWindow.on('closed', () => {
+        mainWindow = null;
+    });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+    // Load database first
+    await loadDatabase();
+    
+    // Create tray icon
+    createTray();
+    
+    // Create window
+    createWindow();
+});
 
 app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-        app.quit();
-    }
+    // Jangan quit di semua platform, biarkan app tetap berjalan di tray
+    // User harus explicitly quit dari tray menu
 });
 
 app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    if (mainWindow) {
+        mainWindow.show();
+    } else {
         createWindow();
     }
+});
+
+// Save database sebelum quit
+app.on('before-quit', async () => {
+    await saveDatabase();
+    if (watcher) {
+        await watcher.close();
+    }
+    stopPeriodicScan();
 });
 
 // Helper: Send log to renderer
@@ -79,6 +376,12 @@ function updateStats() {
             currentSession: currentSessionCode
         });
     }
+    
+    // Update tray menu
+    updateTrayMenu();
+    
+    // Save to database
+    saveDatabase();
 }
 
 // Helper: Check if file is image
@@ -139,6 +442,7 @@ async function uploadFile(filePath, retryCount = 0) {
             uploadedFiles.add(fileName);
             stats.uploadedCount++;
             updateStats();
+            saveDatabase(); // Save immediately after successful upload
             sendLog('success', `✅ Upload berhasil: ${fileName} → ${sessionCode}`);
             return { success: true, sessionCode };
         } else {
@@ -279,21 +583,45 @@ ipcMain.handle('select-folder', async () => {
 
 ipcMain.handle('start-monitoring', async (event, configData) => {
     try {
+        // Update config
+        config.watchFolder = configData.watchFolder;
+        config.apiUrl = configData.apiUrl;
+        config.apiToken = configData.apiToken;
+        
+        // Validate
+        if (!config.watchFolder) {
+            throw new Error('Folder tidak dipilih');
+        }
+        if (!config.apiUrl) {
+            throw new Error('API URL harus diisi');
+        }
+        
+        // Start monitoring
+        await startMonitoring();
+        
+        return {
+            success: true,
+            totalFiles: stats.totalFiles,
+            uploadedCount: stats.uploadedCount,
+            queueSize: uploadQueue.length
+        };
+
+    } catch (error) {
+        return {
+            success: false,
+            message: error.message
+        };
+    }
+});
+
+async function startMonitoring() {
+    try {
         if (watcher) {
             await watcher.close();
         }
 
-        config.watchFolder = configData.watchFolder;
-        config.apiUrl = configData.apiUrl;
-        config.apiToken = configData.apiToken;
-
-        if (!config.watchFolder) {
-            throw new Error('Folder tidak dipilih');
-        }
-
-        // Validate API URL
-        if (!config.apiUrl) {
-            throw new Error('API URL harus diisi');
+        if (!config.watchFolder || !config.apiUrl) {
+            throw new Error('Configuration incomplete');
         }
 
         // Start watching
@@ -311,40 +639,27 @@ ipcMain.handle('start-monitoring', async (event, configData) => {
         watcher.on('error', (error) => {
             sendLog('error', `Watcher error: ${error.message}`);
         });
+        
+        // Start periodic scan
+        startPeriodicScan();
 
         sendLog('info', '✅ Monitoring dimulai! Siap upload foto baru.');
         sendLog('info', `📡 API Endpoint: ${config.apiUrl}`);
-        sendLog('info', '🔢 Session Code: AUTO (otomatis dari server)');
-
-        return {
-            success: true,
-            totalFiles: stats.totalFiles,
-            uploadedCount: stats.uploadedCount,
-            queueSize: uploadQueue.length
-        };
+        sendLog('info', '📢 Session Code: AUTO (otomatis dari server)');
+        sendLog('info', '🔄 Background monitoring active - app can run minimized');
+        
+        updateTrayMenu();
+        saveDatabase();
 
     } catch (error) {
-        return {
-            success: false,
-            message: error.message
-        };
+        throw error;
     }
-});
+}
 
 ipcMain.handle('stop-monitoring', async () => {
     try {
-        if (watcher) {
-            await watcher.close();
-            watcher = null;
-        }
-
-        // Clear queue
-        uploadQueue = [];
-        isProcessing = false;
-        currentSessionCode = null;
-
-        sendLog('info', 'ℹ️ Monitoring dihentikan');
-
+        await stopMonitoring();
+        
         return { success: true };
 
     } catch (error) {
@@ -354,6 +669,32 @@ ipcMain.handle('stop-monitoring', async () => {
         };
     }
 });
+
+async function stopMonitoring() {
+    try {
+        if (watcher) {
+            await watcher.close();
+            watcher = null;
+        }
+
+        // Stop periodic scan
+        stopPeriodicScan();
+
+        // Clear queue (OPTIONAL - bisa dikomen jika mau keep queue)
+        // uploadQueue = [];
+        isProcessing = false;
+        // currentSessionCode = null; // Keep session code
+
+        sendLog('info', 'ℹ️ Monitoring dihentikan');
+        sendLog('info', `📦 Queue preserved: ${uploadQueue.length} files`);
+        
+        updateTrayMenu();
+        saveDatabase();
+
+    } catch (error) {
+        throw error;
+    }
+}
 
 ipcMain.handle('reset-history', async () => {
     try {
