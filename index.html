@@ -3,19 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photo Auto Uploader - Laravel Compatible</title>
+    <title>Memora Photo Uploader - Professional Dashboard</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
+        <!-- Header -->
         <div class="header">
             <h1>
                 <span class="icon">📸</span>
-                Photo Auto Uploader
+                Memora Photo Uploader
             </h1>
-            <p>Upload otomatis foto ke Laravel API - Laravel Compatible</p>
+            <p>Professional Auto Upload dengan LUT Color Grading</p>
             <span class="status-badge status-inactive" id="statusBadge">
                 <span class="status-dot"></span>
                 Monitoring Tidak Aktif
@@ -23,137 +24,167 @@
         </div>
 
         <div class="main-content">
-            <!-- Pengaturan Folder -->
-            <div class="card">
-                <h2><i class="fa-solid fa-folder-open"></i> Pengaturan Folder</h2>
-                
-                <div class="form-group">
-                    <label>Folder yang Dipantau</label>
-                    <div class="folder-display empty" id="watchFolderDisplay">Belum ada folder dipilih</div>
-                    <button class="btn btn-primary" id="selectFolderBtn">
-                        <i class="fa-solid fa-folder"></i> Pilih Folder
+            <!-- Row 1: Settings (3 kolom full width) -->
+            <div class="settings-row">
+                <!-- Folder Settings -->
+                <div class="card">
+                    <h2><i class="fa-solid fa-folder-open"></i> Folder Monitor</h2>
+                    
+                    <div class="form-group">
+                        <label>Folder Dipantau</label>
+                        <div class="folder-display empty" id="watchFolderDisplay">Belum ada folder dipilih</div>
+                        <button class="btn btn-primary btn-full" id="selectFolderBtn">
+                            <i class="fa-solid fa-folder"></i> Pilih Folder
+                        </button>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-number" id="totalFiles">0</div>
+                            <div class="stat-label">Total</div>
+                        </div>
+                        <div class="stat-card stat-success">
+                            <div class="stat-number" id="uploadedCount">0</div>
+                            <div class="stat-label">Success</div>
+                        </div>
+                        <div class="stat-card queue-badge">
+                            <div class="stat-number" id="queueSize">0</div>
+                            <div class="stat-label">Queue</div>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-secondary btn-full" id="resetBtn">
+                        <i class="fa-solid fa-rotate-right"></i> Reset History
                     </button>
                 </div>
 
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-number" id="totalFiles">0</div>
-                        <div class="stat-label">Total Upload</div>
-                    </div>
-                    <div class="stat-card stat-success">
-                        <div class="stat-number" id="uploadedCount">0</div>
-                        <div class="stat-label">Berhasil</div>
-                    </div>
-                    <div class="stat-card queue-badge">
-                        <div class="stat-number" id="queueSize">0</div>
-                        <div class="stat-label">Antrian</div>
-                    </div>
-                </div>
-
-                <button class="btn btn-secondary" id="resetBtn">
-                    <i class="fa-solid fa-rotate-right"></i> Reset History
-                </button>
-            </div>
-
-            <!-- Pengaturan API -->
-            <div class="card">
-                <h2><i class="fa-solid fa-server"></i> Pengaturan Laravel API</h2>
-                
-                <div class="form-group">
-                    <label>API URL <span class="label-required">*</span></label>
-                    <input type="text" id="apiUrl" placeholder="http://localhost:8000/api/photos/upload" value="http://localhost:8000/api/photos/upload">
-                    <small class="form-hint">Endpoint Laravel untuk upload foto</small>
-                </div>
-
-                <div class="form-group">
-                    <label>Bearer Token <span class="label-optional">(Opsional)</span></label>
-                    <input type="password" id="apiToken" placeholder="Masukkan token autentikasi">
-                    <small class="form-hint">Generate token di Laravel dengan tinker</small>
-                </div>
-
-                <div class="form-group">
-                    <label>Session Code <span class="label-optional">(Opsional)</span></label>
-                    <input type="text" id="sessionCode" placeholder="EVENT_001 atau kosongkan untuk auto-generate">
-                    <small class="form-hint">Kosongkan untuk auto-generate berdasarkan timestamp</small>
-                </div>
-
-                <div class="btn-group">
-                    <button class="btn btn-success" id="startBtn" disabled>
-                        <i class="fa-solid fa-play"></i> Mulai
-                    </button>
-                    <button class="btn btn-danger" id="stopBtn" disabled>
-                        <i class="fa-solid fa-stop"></i> Stop
-                    </button>
-                </div>
-            </div>
-
-            <div class="card">
-                <h2><i class="fa-solid fa-circle-info"></i> Cara Menggunakan Aplikasi</h2>
-                
-                <div class="alert alert-info">
-                    <i class="fa-solid fa-bell"></i>
-                    <div>
-                        <strong>🎯 Fitur Baru: Background Monitoring!</strong>
-                        <p>Aplikasi sekarang berjalan di <strong>system tray</strong>. Tutup window tidak akan menghentikan monitoring - aplikasi tetap aktif di background!</p>
-                    </div>
-                </div>
-                
-                <div class="info-section">
-                    <div class="info-item">
-                        <div class="info-number">1</div>
-                        <div class="info-text">
-                            <strong>Pilih Folder yang Akan Dipantau</strong>
-                            <p>Klik tombol "Pilih Folder" dan pilih folder tempat foto-foto akan disimpan (misalnya folder DCIM dari kamera)</p>
-                        </div>
-                    </div>
+                <!-- LUT Filter Settings -->
+                <div class="card">
+                    <h2><i class="fa-solid fa-palette"></i> LUT Color Grading</h2>
                     
-                    <div class="info-item">
-                        <div class="info-number">2</div>
-                        <div class="info-text">
-                            <strong>Atur Konfigurasi API</strong>
-                            <p>Masukkan API URL server Anda. Jika diperlukan, tambahkan Bearer Token dan Session Code untuk identifikasi</p>
+                    <div class="form-group">
+                        <label>LUT File (.cube)</label>
+                        <div class="folder-display empty" id="lutDisplay">Belum ada LUT dipilih</div>
+                        <div class="btn-group">
+                            <button class="btn btn-primary" id="selectLUTBtn">
+                                <i class="fa-solid fa-file-import"></i> Upload
+                            </button>
+                            <button class="btn btn-danger" id="removeLUTBtn" disabled>
+                                <i class="fa-solid fa-trash"></i> Remove
+                            </button>
                         </div>
                     </div>
-                    
-                    <div class="info-item">
-                        <div class="info-number">3</div>
-                        <div class="info-text">
-                            <strong>Mulai Monitoring</strong>
-                            <p>Klik tombol "Mulai" untuk mengaktifkan monitoring otomatis. Setiap foto baru yang ditambahkan ke folder akan otomatis terupload</p>
-                        </div>
-                    </div>
-                    
-                    <div class="info-item">
-                        <div class="info-number">4</div>
-                        <div class="info-text">
-                            <strong>Monitor Proses Upload</strong>
-                            <p>Pantau log aktivitas. Foto akan diupload otomatis satu per satu ke server</p>
+
+                    <div class="preview-container" id="previewContainer" style="display: none;">
+                        <div class="preview-box-compact empty" id="previewBox">
+                            <div class="preview-placeholder">Preview saat foto baru terdeteksi</div>
                         </div>
                     </div>
                 </div>
 
-                <div class="tips-box">
-                    <h3><i class="fa-solid fa-lightbulb"></i> Tips Penggunaan</h3>
-                    <ul>
-                        <li><strong>Background Monitoring:</strong> Close window untuk minimize ke tray - monitoring tetap aktif!</li>
-                        <li><strong>Quit Aplikasi:</strong> Klik kanan icon di tray → pilih "Quit" untuk benar-benar menutup</li>
-                        <li><strong>Auto-Resume:</strong> Queue tersimpan otomatis - tidak hilang saat restart app</li>
-                        <li><strong>Periodic Scan:</strong> Folder di-scan otomatis setiap 30 detik untuk memastikan tidak ada file terlewat</li>
-                        <li>Pastikan Laravel backend sudah running sebelum memulai</li>
-                        <li>Session code akan auto-generate jika dikosongkan</li>
-                        <li>Gunakan "Reset History" untuk membersihkan data statistik</li>
-                        <li>Format foto yang didukung: JPG, JPEG, PNG, GIF, WEBP</li>
-                    </ul>
+                <!-- API Settings -->
+                <div class="card">
+                    <h2><i class="fa-solid fa-server"></i> API Laravel</h2>
+                    
+                    <div class="form-group">
+                        <label>API URL <span class="label-required">*</span></label>
+                        <input type="text" id="apiUrl" placeholder="http://localhost:8000/api/photos/upload" value="http://localhost:8000/api/photos/upload">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Bearer Token <span class="label-optional">(Optional)</span></label>
+                        <input type="password" id="apiToken" placeholder="Token autentikasi">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Session Code <span class="label-optional">(Optional)</span></label>
+                        <input type="text" id="sessionCode" placeholder="Auto-generate">
+                    </div>
+
+                    <div class="btn-group">
+                        <button class="btn btn-success" id="startBtn" disabled>
+                            <i class="fa-solid fa-play"></i> Start
+                        </button>
+                        <button class="btn btn-danger" id="stopBtn" disabled>
+                            <i class="fa-solid fa-stop"></i> Stop
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <!-- Log Aktivitas -->
-            <div class="card full-width">
-                <h2><i class="fa-solid fa-list-check"></i> Log Aktivitas</h2>
-                <div class="log-container" id="logContainer">
-                    <div class="log-item log-info">
-                        <span>ℹ️</span>
-                        <span><strong>Aplikasi siap digunakan.</strong> Pastikan Laravel backend sudah running di <code>http://localhost:8000</code></span>
+            <!-- Row 2: Info & Logs (3 kolom full width) -->
+            <div class="info-row">
+                <!-- Tutorial -->
+                <div class="card card-info">
+                    <h2><i class="fa-solid fa-book"></i> Quick Guide</h2>
+                    
+                    <div class="alert alert-info">
+                        <i class="fa-solid fa-lightbulb"></i>
+                        <div>
+                            <strong>🎨 LUT & Background Mode</strong>
+                            <p>Auto color grading. Berjalan di system tray.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="info-section-compact">
+                        <div class="info-item-compact">
+                            <span class="info-badge">1</span>
+                            <div>
+                                <strong>Pilih Folder</strong>
+                                <p>Folder DCIM atau tempat foto disimpan</p>
+                            </div>
+                        </div>
+                        
+                        <div class="info-item-compact">
+                            <span class="info-badge">2</span>
+                            <div>
+                                <strong>Upload LUT</strong>
+                                <p>File .cube untuk color grading (optional)</p>
+                            </div>
+                        </div>
+                        
+                        <div class="info-item-compact">
+                            <span class="info-badge">3</span>
+                            <div>
+                                <strong>Atur API</strong>
+                                <p>URL Laravel + Bearer Token</p>
+                            </div>
+                        </div>
+                        
+                        <div class="info-item-compact">
+                            <span class="info-badge">4</span>
+                            <div>
+                                <strong>Start Monitor</strong>
+                                <p>Auto-upload setiap 5 detik</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tips-box-compact">
+                        <strong><i class="fa-solid fa-star"></i> Tips:</strong>
+                        <p>Close = tray • LUT auto-filter • Preview live • Queue persistent • Format: JPG, PNG, GIF, WEBP</p>
+                    </div>
+                </div>
+
+                <!-- Log Upload -->
+                <div class="card card-log">
+                    <h2><i class="fa-solid fa-cloud-arrow-up"></i> Log Upload</h2>
+                    <div class="log-container-full" id="logUpload">
+                        <div class="log-item log-success">
+                            <span>✅</span>
+                            <span><strong>Ready</strong> untuk upload foto</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Log System -->
+                <div class="card card-log">
+                    <h2><i class="fa-solid fa-terminal"></i> Log System</h2>
+                    <div class="log-container-full" id="logSystem">
+                        <div class="log-item log-info">
+                            <span>ℹ️</span>
+                            <span><strong>Memora v2.0</strong> ready • Backend: <code>localhost:8000</code></span>
+                        </div>
                     </div>
                 </div>
             </div>

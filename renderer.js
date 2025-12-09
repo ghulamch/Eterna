@@ -1,21 +1,31 @@
 // State aplikasi
 let isMonitoring = false;
 let selectedFolder = null;
+let hasLUT = false;
+let currentPreviewPath = null;
 
 // DOM Elements
 const selectFolderBtn = document.getElementById('selectFolderBtn');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const resetBtn = document.getElementById('resetBtn');
+const selectLUTBtn = document.getElementById('selectLUTBtn');
+const removeLUTBtn = document.getElementById('removeLUTBtn');
 const watchFolderDisplay = document.getElementById('watchFolderDisplay');
+const lutDisplay = document.getElementById('lutDisplay');
 const statusBadge = document.getElementById('statusBadge');
 const totalFilesEl = document.getElementById('totalFiles');
 const uploadedCountEl = document.getElementById('uploadedCount');
 const queueSizeEl = document.getElementById('queueSize');
-const logContainer = document.getElementById('logContainer');
+const logContainer = document.getElementById('logContainer'); // Deprecated - kept for compatibility
+const logUpload = document.getElementById('logUpload');
+const logSystem = document.getElementById('logSystem');
 const apiUrlInput = document.getElementById('apiUrl');
 const apiTokenInput = document.getElementById('apiToken');
 const sessionCodeInput = document.getElementById('sessionCode');
+const previewContainer = document.getElementById('previewContainer');
+const previewBox = document.getElementById('previewBox');
+const previewInfo = document.getElementById('previewInfo');
 
 // Format waktu untuk log
 function getTimeString() {
@@ -43,19 +53,48 @@ function addLogMessage(type, message) {
         <span><strong>[${getTimeString()}]</strong> ${message}</span>
     `;
     
-    // Hapus empty state jika ada
-    const emptyState = logContainer.querySelector('.empty-state');
-    if (emptyState) {
-        emptyState.remove();
+    // Determine which container to use based on message content
+    let targetContainer;
+    const lowerMessage = message.toLowerCase();
+    
+    // Upload-related messages go to logUpload
+    if (lowerMessage.includes('upload') || 
+        lowerMessage.includes('terdeteksi') || 
+        lowerMessage.includes('detected') ||
+        lowerMessage.includes('file baru') ||
+        lowerMessage.includes('ditambahkan') ||
+        lowerMessage.includes('lut applied') ||
+        lowerMessage.includes('lut berhasil') ||
+        lowerMessage.includes('preview') ||
+        type === 'success' ||
+        type === 'error') {
+        targetContainer = logUpload;
+    } 
+    // System messages go to logSystem
+    else {
+        targetContainer = logSystem;
     }
     
-    // Tambah log baru di atas
-    logContainer.insertBefore(logItem, logContainer.firstChild);
+    // Fallback to logUpload if containers not found
+    if (!targetContainer) {
+        targetContainer = logUpload || logSystem;
+    }
     
-    // Batasi jumlah log (max 100)
-    const logItems = logContainer.querySelectorAll('.log-item');
-    if (logItems.length > 100) {
-        logItems[logItems.length - 1].remove();
+    if (targetContainer) {
+        // Hapus empty state jika ada
+        const emptyState = targetContainer.querySelector('.empty-state');
+        if (emptyState) {
+            emptyState.remove();
+        }
+        
+        // Tambah log baru di atas
+        targetContainer.insertBefore(logItem, targetContainer.firstChild);
+        
+        // Batasi jumlah log (max 50 per container)
+        const logItems = targetContainer.querySelectorAll('.log-item');
+        if (logItems.length > 50) {
+            logItems[logItems.length - 1].remove();
+        }
     }
 }
 
@@ -104,6 +143,54 @@ function updateFolderDisplay(folderPath) {
     }
 }
 
+// Update LUT display
+function updateLUTDisplay(lutName) {
+    if (lutName) {
+        lutDisplay.textContent = lutName;
+        lutDisplay.classList.remove('empty');
+        hasLUT = true;
+        removeLUTBtn.disabled = false;
+        
+        // Show preview container
+        previewContainer.style.display = 'block';
+    } else {
+        lutDisplay.textContent = 'Belum ada LUT dipilih';
+        lutDisplay.classList.add('empty');
+        hasLUT = false;
+        removeLUTBtn.disabled = true;
+        
+        // Hide preview container if no LUT
+        if (!isMonitoring) {
+            previewContainer.style.display = 'none';
+        }
+    }
+}
+
+// Update preview
+function updatePreview(base64Image, fileName, hasLUTApplied) {
+    if (base64Image) {
+        previewBox.classList.remove('empty');
+        previewBox.innerHTML = `
+            <div>
+                <img src="data:image/jpeg;base64,${base64Image}" alt="Preview">
+                <div style="margin-top: 10px; font-size: 0.9rem; color: #64748b;">
+                    ${fileName}
+                </div>
+                ${hasLUTApplied ? '<span class="lut-badge">🎨 LUT Applied</span>' : '<span class="lut-badge no-lut">No LUT</span>'}
+            </div>
+        `;
+        previewInfo.style.display = 'block';
+    } else {
+        previewBox.classList.add('empty');
+        previewBox.innerHTML = `
+            <div class="preview-placeholder">
+                Preview akan muncul saat ada foto baru terdeteksi
+            </div>
+        `;
+        previewInfo.style.display = 'none';
+    }
+}
+
 // Toggle buttons state
 function toggleButtons(monitoring) {
     isMonitoring = monitoring;
@@ -112,16 +199,28 @@ function toggleButtons(monitoring) {
         startBtn.disabled = true;
         stopBtn.disabled = false;
         selectFolderBtn.disabled = true;
+        selectLUTBtn.disabled = true;
+        removeLUTBtn.disabled = true;
         apiUrlInput.disabled = true;
         apiTokenInput.disabled = true;
         sessionCodeInput.disabled = true;
+        
+        // Show preview container when monitoring
+        if (hasLUT) {
+            previewContainer.style.display = 'block';
+        }
     } else {
         startBtn.disabled = !selectedFolder;
         stopBtn.disabled = true;
         selectFolderBtn.disabled = false;
+        selectLUTBtn.disabled = false;
+        removeLUTBtn.disabled = !hasLUT;
         apiUrlInput.disabled = false;
         apiTokenInput.disabled = false;
         sessionCodeInput.disabled = false;
+        
+        // Clear preview when stopped
+        updatePreview(null);
     }
     
     updateStatusBadge(monitoring);
@@ -141,6 +240,39 @@ selectFolderBtn.addEventListener('click', async () => {
         }
     } catch (error) {
         addLogMessage('error', `Error memilih folder: ${error.message}`);
+    }
+});
+
+// Event: Pilih LUT
+selectLUTBtn.addEventListener('click', async () => {
+    try {
+        const result = await window.electronAPI.selectLUT();
+        
+        if (result.success) {
+            updateLUTDisplay(result.lutName);
+            addLogMessage('success', `LUT berhasil diupload: ${result.lutName}`);
+        }
+    } catch (error) {
+        addLogMessage('error', `Error upload LUT: ${error.message}`);
+    }
+});
+
+// Event: Hapus LUT
+removeLUTBtn.addEventListener('click', async () => {
+    if (!confirm('Apakah Anda yakin ingin menghapus LUT?')) {
+        return;
+    }
+    
+    try {
+        const result = await window.electronAPI.removeLUT();
+        
+        if (result.success) {
+            updateLUTDisplay(null);
+            updatePreview(null);
+            addLogMessage('info', 'LUT berhasil dihapus');
+        }
+    } catch (error) {
+        addLogMessage('error', `Error hapus LUT: ${error.message}`);
     }
 });
 
@@ -189,11 +321,14 @@ stopBtn.addEventListener('click', async () => {
         
         if (result.success) {
             toggleButtons(false);
-            addLogMessage('info', 'Monitoring dihentikan. Antrian dibersihkan.');
+            addLogMessage('info', 'Monitoring dihentikan.');
             
             // Update stats
             const stats = await window.electronAPI.getStats();
             updateStats(stats.totalFiles, stats.uploadedCount, 0);
+            
+            // Clear preview
+            updatePreview(null);
         } else {
             addLogMessage('error', result.message);
         }
@@ -225,18 +360,52 @@ resetBtn.addEventListener('click', async () => {
 // Listen untuk log messages dari main process
 window.electronAPI.onLogMessage((data) => {
     addLogMessage(data.type, data.message);
+    
+    // Check if new file detected for preview
+    if (isMonitoring && hasLUT && data.message.includes('File baru terdeteksi:')) {
+        // Extract file name from message
+        const match = data.message.match(/File baru terdeteksi: (.+)$/);
+        if (match && match[1]) {
+            const fileName = match[1];
+            const filePath = selectedFolder + '/' + fileName;
+            
+            // Generate preview
+            generatePreviewForFile(filePath, fileName);
+        }
+    }
 });
+
+// Generate preview for file
+async function generatePreviewForFile(filePath, fileName) {
+    try {
+        const result = await window.electronAPI.generatePreview(filePath);
+        
+        if (result.success) {
+            updatePreview(result.preview, fileName, result.hasLUT);
+            currentPreviewPath = filePath;
+        }
+    } catch (error) {
+        console.error('Error generating preview:', error);
+    }
+}
 
 // Listen untuk update stats dari main process
 window.electronAPI.onUpdateStats((data) => {
     updateStats(data.totalFiles, data.uploadedCount, data.queueSize);
 });
 
-// Load stats saat aplikasi dibuka
+// Load initial data saat aplikasi dibuka
 window.addEventListener('DOMContentLoaded', async () => {
     try {
+        // Load stats
         const stats = await window.electronAPI.getStats();
         updateStats(stats.totalFiles, stats.uploadedCount, stats.queueSize);
+        
+        // Load LUT info
+        const lutInfo = await window.electronAPI.getLUTInfo();
+        if (lutInfo.hasLUT) {
+            updateLUTDisplay(lutInfo.lutName);
+        }
     } catch (error) {
         console.error('Error loading initial data:', error);
     }
