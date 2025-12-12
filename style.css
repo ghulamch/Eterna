@@ -207,10 +207,62 @@ input[type="text"], input[type="password"] {
     font-family: 'Inter', sans-serif;
 }
 
+select.preset-select {
+    width: 100%;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    transition: all 0.3s;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+}
+
+select.preset-select option {
+    background: var(--secondary);
+    color: var(--text-primary);
+    padding: 8px;
+}
+
+select.preset-select:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
 input:focus {
     outline: none;
     border-color: rgba(255, 255, 255, 0.3);
     background: rgba(255, 255, 255, 0.05);
+}
+
+select.preset-select:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 20px 0;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.divider span {
+    padding: 0 15px;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
 .folder-display {

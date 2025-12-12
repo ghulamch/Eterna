@@ -6,6 +6,7 @@ const chokidar = require('chokidar');
 const axios = require('axios');
 const FormData = require('form-data');
 const sharp = require('sharp');
+const xml2js = require('xml2js');
 
 // Configuration
 const CONFIG = {
@@ -29,6 +30,8 @@ let currentSessionCode = null;
 let scanIntervalId = null;
 let currentLUT = null;
 let lutData = null;
+let currentXMP = null; // XMP preset
+let xmpData = null; // Parsed XMP adjustments
 let stats = {
     totalFiles: 0,
     uploadedCount: 0,
@@ -268,15 +271,489 @@ async function generatePreview(imagePath) {
             } catch (e) {}
         }
         
+        // Apply XMP if available
+        if (xmpData) {
+            const tempPath = path.join(app.getPath('temp'), 'preview-temp.jpg');
+            const tempOutputPath = path.join(app.getPath('temp'), 'preview-processed.jpg');
+            
+            await fs.writeFile(tempPath, processedBuffer);
+            await applyXMPToImage(tempPath, tempOutputPath, xmpData);
+            processedBuffer = await fs.readFile(tempOutputPath);
+            
+            // Cleanup temp files
+            try {
+                await fs.unlink(tempPath);
+                await fs.unlink(tempOutputPath);
+            } catch (e) {}
+        }
+        
         return {
             success: true,
             preview: processedBuffer.toString('base64'),
-            hasLUT: !!lutData
+            hasLUT: !!lutData,
+            hasXMP: !!xmpData
         };
     } catch (error) {
         return {
             success: false,
             error: error.message
+        };
+    }
+}
+
+// ============================================
+// XMP FUNCTIONS
+// ============================================
+
+// Parse XMP file
+async function parseXMP(filePath) {
+    try {
+        const content = await fs.readFile(filePath, 'utf8');
+        const parser = new xml2js.Parser({
+            explicitArray: false,
+            mergeAttrs: true
+        });
+        
+        const result = await parser.parseStringPromise(content);
+        
+        // Navigate XMP structure to find Camera Raw/Lightroom settings
+        let crsSettings = {};
+        
+        // Try to find crs (Camera Raw Settings) namespace
+        if (result['x:xmpmeta'] && result['x:xmpmeta']['rdf:RDF'] && result['x:xmpmeta']['rdf:RDF']['rdf:Description']) {
+            const desc = result['x:xmpmeta']['rdf:RDF']['rdf:Description'];
+            
+            // Extract all crs: prefixed attributes
+            for (const key in desc) {
+                if (key.startsWith('crs:')) {
+                    const cleanKey = key.replace('crs:', '');
+                    crsSettings[cleanKey] = parseFloat(desc[key]) || desc[key];
+                }
+            }
+        }
+        
+        const adjustments = convertXMPToAdjustments(crsSettings);
+        
+        sendLog('success', `✅ XMP loaded: ${path.basename(filePath)}`);
+        
+        return adjustments;
+    } catch (error) {
+        sendLog('error', `Failed to parse XMP: ${error.message}`);
+        throw error;
+    }
+}
+
+// Convert XMP Camera Raw settings to our adjustment format
+function convertXMPToAdjustments(crsSettings) {
+    // Default adjustments
+    const adjustments = {
+        exposure: 0,        // -5.0 to +5.0
+        contrast: 0,        // -100 to +100
+        highlights: 0,      // -100 to +100
+        shadows: 0,         // -100 to +100
+        whites: 0,          // -100 to +100
+        blacks: 0,          // -100 to +100
+        vibrance: 0,        // -100 to +100
+        saturation: 0,      // -100 to +100
+        temperature: 0,     // -100 to +100 (Kelvin simplified)
+        tint: 0,            // -100 to +100
+        clarity: 0,         // -100 to +100
+        dehaze: 0           // -100 to +100
+    };
+    
+    // Map XMP values to our adjustments
+    if (crsSettings.Exposure2012 !== undefined) {
+        adjustments.exposure = parseFloat(crsSettings.Exposure2012);
+    }
+    if (crsSettings.Contrast2012 !== undefined) {
+        adjustments.contrast = parseFloat(crsSettings.Contrast2012);
+    }
+    if (crsSettings.Highlights2012 !== undefined) {
+        adjustments.highlights = parseFloat(crsSettings.Highlights2012);
+    }
+    if (crsSettings.Shadows2012 !== undefined) {
+        adjustments.shadows = parseFloat(crsSettings.Shadows2012);
+    }
+    if (crsSettings.Whites2012 !== undefined) {
+        adjustments.whites = parseFloat(crsSettings.Whites2012);
+    }
+    if (crsSettings.Blacks2012 !== undefined) {
+        adjustments.blacks = parseFloat(crsSettings.Blacks2012);
+    }
+    if (crsSettings.Vibrance !== undefined) {
+        adjustments.vibrance = parseFloat(crsSettings.Vibrance);
+    }
+    if (crsSettings.Saturation !== undefined) {
+        adjustments.saturation = parseFloat(crsSettings.Saturation);
+    }
+    if (crsSettings.Temperature !== undefined) {
+        // Convert Kelvin (typically 2000-50000) to -100 to +100
+        const temp = parseFloat(crsSettings.Temperature);
+        adjustments.temperature = ((temp - 6500) / 100); // Neutral is 6500K
+    }
+    if (crsSettings.Tint !== undefined) {
+        adjustments.tint = parseFloat(crsSettings.Tint);
+    }
+    if (crsSettings.Clarity2012 !== undefined) {
+        adjustments.clarity = parseFloat(crsSettings.Clarity2012);
+    }
+    if (crsSettings.Dehaze !== undefined) {
+        adjustments.dehaze = parseFloat(crsSettings.Dehaze);
+    }
+    
+    return adjustments;
+}
+
+// Apply XMP adjustments to image
+async function applyXMPToImage(inputPath, outputPath, adjustments) {
+    try {
+        // Read image
+        const image = sharp(inputPath);
+        const metadata = await image.metadata();
+        const { data, info } = await image
+            .raw()
+            .toBuffer({ resolveWithObject: true });
+        
+        // Process pixels
+        const pixels = new Uint8Array(data.length);
+        const channels = info.channels;
+        
+        for (let i = 0; i < data.length; i += channels) {
+            let r = data[i];
+            let g = data[i + 1];
+            let b = data[i + 2];
+            
+            // Apply adjustments
+            [r, g, b] = applyXMPAdjustments(r, g, b, adjustments);
+            
+            pixels[i] = r;
+            pixels[i + 1] = g;
+            pixels[i + 2] = b;
+            
+            if (channels === 4) {
+                pixels[i + 3] = data[i + 3]; // Preserve alpha
+            }
+        }
+        
+        // Save processed image
+        await sharp(pixels, {
+            raw: {
+                width: info.width,
+                height: info.height,
+                channels: channels
+            }
+        })
+        .jpeg({ quality: 95 })
+        .toFile(outputPath);
+        
+        return true;
+    } catch (error) {
+        console.error('Error applying XMP:', error);
+        throw error;
+    }
+}
+
+// Apply XMP adjustments to a single pixel
+function applyXMPAdjustments(r, g, b, adj) {
+    // Convert RGB to HSL for some adjustments
+    const [h, s, l] = rgbToHsl(r, g, b);
+    
+    // 1. Exposure (-5 to +5, multiply by 2^exposure)
+    if (adj.exposure !== 0) {
+        const expFactor = Math.pow(2, adj.exposure);
+        r *= expFactor;
+        g *= expFactor;
+        b *= expFactor;
+    }
+    
+    // 2. Contrast (-100 to +100)
+    if (adj.contrast !== 0) {
+        const contrastFactor = (adj.contrast + 100) / 100;
+        r = ((r / 255 - 0.5) * contrastFactor + 0.5) * 255;
+        g = ((g / 255 - 0.5) * contrastFactor + 0.5) * 255;
+        b = ((b / 255 - 0.5) * contrastFactor + 0.5) * 255;
+    }
+    
+    // 3. Highlights (-100 to +100) - affect bright areas
+    if (adj.highlights !== 0) {
+        const brightness = (r + g + b) / 3;
+        if (brightness > 128) {
+            const factor = 1 + (adj.highlights / 100) * ((brightness - 128) / 127);
+            r *= factor;
+            g *= factor;
+            b *= factor;
+        }
+    }
+    
+    // 4. Shadows (-100 to +100) - affect dark areas
+    if (adj.shadows !== 0) {
+        const brightness = (r + g + b) / 3;
+        if (brightness < 128) {
+            const factor = 1 + (adj.shadows / 100) * ((128 - brightness) / 128);
+            r *= factor;
+            g *= factor;
+            b *= factor;
+        }
+    }
+    
+    // 5. Saturation (-100 to +100)
+    if (adj.saturation !== 0) {
+        const gray = r * 0.299 + g * 0.587 + b * 0.114;
+        const satFactor = 1 + (adj.saturation / 100);
+        r = gray + (r - gray) * satFactor;
+        g = gray + (g - gray) * satFactor;
+        b = gray + (b - gray) * satFactor;
+    }
+    
+    // 6. Vibrance (-100 to +100) - smart saturation
+    if (adj.vibrance !== 0) {
+        const avg = (r + g + b) / 3;
+        const maxChannel = Math.max(r, g, b);
+        const minChannel = Math.min(r, g, b);
+        const saturation = maxChannel > 0 ? (maxChannel - minChannel) / maxChannel : 0;
+        
+        // Vibrance affects less saturated colors more
+        const vibFactor = 1 + (adj.vibrance / 100) * (1 - saturation);
+        r = avg + (r - avg) * vibFactor;
+        g = avg + (g - avg) * vibFactor;
+        b = avg + (b - avg) * vibFactor;
+    }
+    
+    // 7. Temperature & Tint (simplified)
+    if (adj.temperature !== 0) {
+        const tempFactor = adj.temperature / 100;
+        if (tempFactor > 0) {
+            r += tempFactor * 30;
+            b -= tempFactor * 30;
+        } else {
+            r += tempFactor * 30;
+            b -= tempFactor * 30;
+        }
+    }
+    
+    if (adj.tint !== 0) {
+        const tintFactor = adj.tint / 100;
+        g += tintFactor * 30;
+    }
+    
+    // Clamp values to 0-255
+    r = Math.max(0, Math.min(255, Math.round(r)));
+    g = Math.max(0, Math.min(255, Math.round(g)));
+    b = Math.max(0, Math.min(255, Math.round(b)));
+    
+    return [r, g, b];
+}
+
+// Helper: RGB to HSL conversion
+function rgbToHsl(r, g, b) {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+    
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+    
+    if (max === min) {
+        h = s = 0;
+    } else {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        
+        switch (max) {
+            case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+            case g: h = ((b - r) / d + 2) / 6; break;
+            case b: h = ((r - g) / d + 4) / 6; break;
+        }
+    }
+    
+    return [h * 360, s * 100, l * 100];
+}
+
+// Helper: HSL to RGB conversion
+function hslToRgb(h, s, l) {
+    h /= 360;
+    s /= 100;
+    l /= 100;
+    
+    let r, g, b;
+    
+    if (s === 0) {
+        r = g = b = l;
+    } else {
+        const hue2rgb = (p, q, t) => {
+            if (t < 0) t += 1;
+            if (t > 1) t -= 1;
+            if (t < 1/6) return p + (q - p) * 6 * t;
+            if (t < 1/2) return q;
+            if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+            return p;
+        };
+        
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        const p = 2 * l - q;
+        
+        r = hue2rgb(p, q, h + 1/3);
+        g = hue2rgb(p, q, h);
+        b = hue2rgb(p, q, h - 1/3);
+    }
+    
+    return [
+        Math.round(r * 255),
+        Math.round(g * 255),
+        Math.round(b * 255)
+    ];
+}
+
+// ============================================
+// PRESET LIBRARY FUNCTIONS
+// ============================================
+
+// Load preset library from bundled presets.json
+async function loadPresetLibrary() {
+    // Try multiple paths for development and production
+    const possiblePaths = [
+        // Production (packaged)
+        path.join(process.resourcesPath, 'app.asar.unpacked', 'presets', 'presets.json'),
+        path.join(process.resourcesPath, 'presets', 'presets.json'),
+        // Development
+        path.join(__dirname, 'presets', 'presets.json'),
+        path.join(__dirname, '..', 'presets', 'presets.json'),
+        // Fallback
+        path.join(app.getAppPath(), 'presets', 'presets.json')
+    ];
+    
+    for (const presetsPath of possiblePaths) {
+        try {
+            console.log('Trying preset path:', presetsPath);
+            
+            // Check if file exists
+            await fs.access(presetsPath);
+            
+            // Read and parse
+            const content = await fs.readFile(presetsPath, 'utf8');
+            const library = JSON.parse(content);
+            
+            console.log('✅ Preset library loaded from:', presetsPath);
+            console.log('Loaded presets:', library.presets.length);
+            
+            return library;
+        } catch (error) {
+            console.log('❌ Failed to load from:', presetsPath, error.message);
+            continue;
+        }
+    }
+    
+    // If all paths fail, return default fallback
+    console.error('⚠️ Could not load preset library from any path. Using fallback.');
+    sendLog('error', 'Failed to load preset library - using defaults');
+    
+    return {
+        presets: [
+            {
+                id: "none",
+                name: "No Filter",
+                type: "none",
+                file: null,
+                description: "Original colors, no grading applied",
+                category: "default",
+                thumbnail: null
+            }
+        ],
+        categories: [
+            {
+                id: "default",
+                name: "Default",
+                icon: "fa-circle"
+            }
+        ]
+    };
+}
+
+// Apply preset by ID
+async function applyPreset(presetId) {
+    try {
+        const library = await loadPresetLibrary();
+        const preset = library.presets.find(p => p.id === presetId);
+        
+        if (!preset) {
+            throw new Error('Preset not found');
+        }
+        
+        // Clear current filters
+        currentLUT = null;
+        lutData = null;
+        currentXMP = null;
+        xmpData = null;
+        
+        if (preset.type === 'none') {
+            // No filter
+            sendLog('info', '⭕ No filter applied');
+            saveDatabase();
+            updateTrayMenu();
+            return {
+                success: true,
+                preset: preset
+            };
+        }
+        
+        // Find preset file with multiple path attempts
+        const presetFolder = preset.type === 'cube' ? 'luts' : 'xmp';
+        
+        const possibleBasePaths = [
+            // Production
+            path.join(process.resourcesPath, 'app.asar.unpacked', 'presets'),
+            path.join(process.resourcesPath, 'presets'),
+            // Development
+            path.join(__dirname, 'presets'),
+            path.join(__dirname, '..', 'presets'),
+            // Fallback
+            path.join(app.getAppPath(), 'presets')
+        ];
+        
+        let presetPath = null;
+        for (const basePath of possibleBasePaths) {
+            const testPath = path.join(basePath, presetFolder, preset.file);
+            try {
+                await fs.access(testPath);
+                presetPath = testPath;
+                console.log('✅ Found preset file at:', presetPath);
+                break;
+            } catch (error) {
+                console.log('❌ Preset not found at:', testPath);
+                continue;
+            }
+        }
+        
+        if (!presetPath) {
+            throw new Error(`Preset file not found: ${preset.file}`);
+        }
+        
+        // Parse based on type
+        if (preset.type === 'cube') {
+            lutData = await parseCubeLUT(presetPath);
+            currentLUT = presetPath;
+            sendLog('success', `🎨 Preset applied: ${preset.name} (CUBE)`);
+        } else if (preset.type === 'xmp') {
+            xmpData = await parseXMP(presetPath);
+            currentXMP = presetPath;
+            sendLog('success', `🎨 Preset applied: ${preset.name} (XMP)`);
+        }
+        
+        saveDatabase();
+        updateTrayMenu();
+        
+        return {
+            success: true,
+            preset: preset
+        };
+        
+    } catch (error) {
+        console.error('Error applying preset:', error);
+        sendLog('error', `Failed to apply preset: ${error.message}`);
+        return {
+            success: false,
+            message: error.message
         };
     }
 }
@@ -458,7 +935,7 @@ function updateTrayMenu() {
             enabled: false
         },
         {
-            label: `LUT: ${currentLUT ? '✅ Active' : '❌ None'}`,
+            label: `Filter: ${currentLUT ? '✅ CUBE' : (currentXMP ? '✅ XMP' : '❌ None')}`,
             enabled: false
         },
         { type: 'separator' },
@@ -616,7 +1093,15 @@ async function uploadFile(filePath, retryCount = 0) {
             const tempOutputPath = path.join(app.getPath('temp'), `processed-${fileName}`);
             await applyLUTToImage(filePath, tempOutputPath, lutData);
             uploadPath = tempOutputPath;
-            sendLog('info', `🎨 LUT applied to: ${fileName}`);
+            sendLog('info', `🎨 CUBE LUT applied to: ${fileName}`);
+        }
+        
+        // Apply XMP if available (and no LUT)
+        if (xmpData && !lutData) {
+            const tempOutputPath = path.join(app.getPath('temp'), `processed-${fileName}`);
+            await applyXMPToImage(filePath, tempOutputPath, xmpData);
+            uploadPath = tempOutputPath;
+            sendLog('info', `🎨 XMP Preset applied to: ${fileName}`);
         }
 
         // Read file
@@ -667,8 +1152,8 @@ async function uploadFile(filePath, retryCount = 0) {
         updateStats();
         saveDatabase();
         
-        // Cleanup temp file if LUT was applied
-        if (lutData && uploadPath !== filePath) {
+        // Cleanup temp file if LUT/XMP was applied
+        if ((lutData || xmpData) && uploadPath !== filePath) {
             try {
                 await fs.unlink(uploadPath);
             } catch (e) {}
@@ -849,6 +1334,27 @@ function createWindow() {
 // IPC HANDLERS
 // ============================================
 
+// Get preset library
+ipcMain.handle('get-preset-library', async () => {
+    try {
+        const library = await loadPresetLibrary();
+        return {
+            success: true,
+            library: library
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: error.message
+        };
+    }
+});
+
+// Apply preset by ID
+ipcMain.handle('apply-preset', async (event, presetId) => {
+    return await applyPreset(presetId);
+});
+
 ipcMain.handle('select-folder', async () => {
     try {
         const result = await dialog.showOpenDialog(mainWindow, {
@@ -888,7 +1394,9 @@ ipcMain.handle('select-lut', async () => {
         const result = await dialog.showOpenDialog(mainWindow, {
             properties: ['openFile'],
             filters: [
-                { name: 'LUT Files', extensions: ['cube'] }
+                { name: 'Color Grading Files', extensions: ['cube', 'xmp'] },
+                { name: 'LUT Files', extensions: ['cube'] },
+                { name: 'XMP Presets', extensions: ['xmp'] }
             ]
         });
 
@@ -896,16 +1404,36 @@ ipcMain.handle('select-lut', async () => {
             return { success: false };
         }
 
-        const lutPath = result.filePaths[0];
-        const lutFileName = path.basename(lutPath);
+        const filePath = result.filePaths[0];
+        const fileName = path.basename(filePath);
+        const fileExt = path.extname(filePath).toLowerCase();
         
-        // Copy LUT to app directory
-        const destPath = path.join(CONFIG.lutPath, lutFileName);
-        await fs.copyFile(lutPath, destPath);
+        // Copy file to app directory
+        const destPath = path.join(CONFIG.lutPath, fileName);
+        await fs.copyFile(filePath, destPath);
         
-        // Parse LUT
-        lutData = await parseCubeLUT(destPath);
-        currentLUT = destPath;
+        // Parse based on file type
+        if (fileExt === '.cube') {
+            // Clear XMP if switching to CUBE
+            currentXMP = null;
+            xmpData = null;
+            
+            // Parse CUBE LUT
+            lutData = await parseCubeLUT(destPath);
+            currentLUT = destPath;
+            
+            sendLog('success', `🎨 CUBE LUT loaded: ${fileName}`);
+        } else if (fileExt === '.xmp') {
+            // Clear CUBE if switching to XMP
+            currentLUT = null;
+            lutData = null;
+            
+            // Parse XMP preset
+            xmpData = await parseXMP(destPath);
+            currentXMP = destPath;
+            
+            sendLog('success', `🎨 XMP Preset loaded: ${fileName}`);
+        }
         
         saveDatabase();
         updateTrayMenu();
@@ -913,7 +1441,8 @@ ipcMain.handle('select-lut', async () => {
         return {
             success: true,
             lutPath: destPath,
-            lutName: lutFileName
+            lutName: fileName,
+            fileType: fileExt === '.cube' ? 'CUBE' : 'XMP'
         };
 
     } catch (error) {
@@ -928,11 +1457,13 @@ ipcMain.handle('remove-lut', async () => {
     try {
         currentLUT = null;
         lutData = null;
+        currentXMP = null;
+        xmpData = null;
         
         saveDatabase();
         updateTrayMenu();
         
-        sendLog('info', '🗑️ LUT removed');
+        sendLog('info', '🗑️ Color grading removed');
         
         return { success: true };
     } catch (error) {
@@ -944,9 +1475,16 @@ ipcMain.handle('remove-lut', async () => {
 });
 
 ipcMain.handle('get-lut-info', async () => {
+    const hasFilter = !!(currentLUT || currentXMP);
+    const filterName = currentLUT 
+        ? path.basename(currentLUT) 
+        : (currentXMP ? path.basename(currentXMP) : null);
+    const filterType = currentLUT ? 'CUBE' : (currentXMP ? 'XMP' : null);
+    
     return {
-        hasLUT: !!currentLUT,
-        lutName: currentLUT ? path.basename(currentLUT) : null
+        hasLUT: hasFilter,
+        lutName: filterName,
+        filterType: filterType
     };
 });
 
@@ -1023,7 +1561,9 @@ async function startMonitoring() {
         sendLog('info', `📡 API Endpoint: ${config.apiUrl}`);
         
         if (currentLUT) {
-            sendLog('info', `🎨 LUT Active: ${path.basename(currentLUT)}`);
+            sendLog('info', `🎨 CUBE LUT Active: ${path.basename(currentLUT)}`);
+        } else if (currentXMP) {
+            sendLog('info', `🎨 XMP Preset Active: ${path.basename(currentXMP)}`);
         }
         
         sendLog('info', '📢 Session Code: AUTO (otomatis dari server)');

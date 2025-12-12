@@ -5,6 +5,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Pilih folder
     selectFolder: () => ipcRenderer.invoke('select-folder'),
     
+    // Preset operations
+    getPresetLibrary: () => ipcRenderer.invoke('get-preset-library'),
+    applyPreset: (presetId) => ipcRenderer.invoke('apply-preset', presetId),
+    
     // LUT operations
     selectLUT: () => ipcRenderer.invoke('select-lut'),
     removeLUT: () => ipcRenderer.invoke('remove-lut'),

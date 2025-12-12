@@ -25,7 +25,8 @@
     "axios": "^1.6.2",
     "chokidar": "^3.5.3",
     "form-data": "^4.0.0",
-    "sharp": "^0.33.1"
+    "sharp": "^0.33.1",
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
     "electron": "^28.0.0",
@@ -44,10 +45,15 @@
       "index.html",
       "style.css",
       "icon.png",
+      "memora_logo.png",
+      "presets/**/*",
       "!dist/**/*",
       "!*.md",
       "!face_detector.py",
       "!requirements.txt"
+    ],
+    "asarUnpack": [
+      "presets/**/*"
     ],
     "win": {
       "target": "nsis",

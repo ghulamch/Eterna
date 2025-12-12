@@ -1,0 +1,25 @@
+{
+  "presets": [
+    {
+      "id": "1",
+      "name": "Display Name",
+      "type": "cube",
+      "file": "cinematic.cube",
+      "description": "Short description",
+      "category": "cinematic",
+      "thumbnail": null
+    }
+  ],
+  "categories": [
+    {
+      "id": "cinematic",
+      "name": "Cinematic",
+      "icon": "fa-film"
+    },
+    {
+      "id": "photography",
+      "name": "Photography",
+      "icon": "fa-camera"
+    }
+  ]
+}

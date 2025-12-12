@@ -3,12 +3,15 @@ let isMonitoring = false;
 let selectedFolder = null;
 let hasLUT = false;
 let currentPreviewPath = null;
+let presetLibrary = null;
+let currentPresetId = null;
 
 // DOM Elements
 const selectFolderBtn = document.getElementById('selectFolderBtn');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const resetBtn = document.getElementById('resetBtn');
+const presetSelect = document.getElementById('presetSelect');
 const selectLUTBtn = document.getElementById('selectLUTBtn');
 const removeLUTBtn = document.getElementById('removeLUTBtn');
 const watchFolderDisplay = document.getElementById('watchFolderDisplay');
@@ -26,6 +29,63 @@ const sessionCodeInput = document.getElementById('sessionCode');
 const previewContainer = document.getElementById('previewContainer');
 const previewBox = document.getElementById('previewBox');
 const previewInfo = document.getElementById('previewInfo');
+
+// Load preset library
+async function loadPresetLibrary() {
+    try {
+        console.log('Loading preset library...');
+        const result = await window.electronAPI.getPresetLibrary();
+        
+        console.log('Preset library result:', result);
+        
+        if (result.success) {
+            presetLibrary = result.library;
+            console.log('✅ Preset library loaded:', presetLibrary.presets?.length, 'presets');
+            populatePresetSelect();
+        } else {
+            console.error('❌ Failed to load preset library:', result.message);
+            addLogMessage('error', 'Failed to load preset library');
+            presetSelect.innerHTML = '<option value="">Error loading presets</option>';
+        }
+    } catch (error) {
+        console.error('❌ Error loading presets:', error);
+        addLogMessage('error', `Preset error: ${error.message}`);
+        presetSelect.innerHTML = '<option value="">Error loading presets</option>';
+    }
+}
+
+// Populate preset select dropdown
+function populatePresetSelect() {
+    if (!presetLibrary) return;
+    
+    presetSelect.innerHTML = '';
+    
+    // Group by category
+    const categories = presetLibrary.categories || [];
+    const presets = presetLibrary.presets || [];
+    
+    categories.forEach(category => {
+        const categoryPresets = presets.filter(p => p.category === category.id);
+        
+        if (categoryPresets.length > 0) {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = category.name;
+            
+            categoryPresets.forEach(preset => {
+                const option = document.createElement('option');
+                option.value = preset.id;
+                option.textContent = `${preset.name} ${preset.type === 'cube' ? '(CUBE)' : preset.type === 'xmp' ? '(XMP)' : ''}`;
+                option.setAttribute('data-description', preset.description);
+                optgroup.appendChild(option);
+            });
+            
+            presetSelect.appendChild(optgroup);
+        }
+    });
+    
+    // Set default to "none"
+    presetSelect.value = 'none';
+}
 
 // Format waktu untuk log
 function getTimeString() {
@@ -167,16 +227,26 @@ function updateLUTDisplay(lutName) {
 }
 
 // Update preview
-function updatePreview(base64Image, fileName, hasLUTApplied) {
+function updatePreview(base64Image, fileName, hasLUTApplied, hasXMPApplied) {
     if (base64Image) {
         previewBox.classList.remove('empty');
+        
+        let filterBadge = '';
+        if (hasLUTApplied) {
+            filterBadge = '<span class="lut-badge">🎨 CUBE Applied</span>';
+        } else if (hasXMPApplied) {
+            filterBadge = '<span class="lut-badge">🎨 XMP Applied</span>';
+        } else {
+            filterBadge = '<span class="lut-badge no-lut">No Filter</span>';
+        }
+        
         previewBox.innerHTML = `
             <div>
                 <img src="data:image/jpeg;base64,${base64Image}" alt="Preview">
                 <div style="margin-top: 10px; font-size: 0.9rem; color: #64748b;">
                     ${fileName}
                 </div>
-                ${hasLUTApplied ? '<span class="lut-badge">🎨 LUT Applied</span>' : '<span class="lut-badge no-lut">No LUT</span>'}
+                ${filterBadge}
             </div>
         `;
         previewInfo.style.display = 'block';
@@ -243,6 +313,47 @@ selectFolderBtn.addEventListener('click', async () => {
     }
 });
 
+// Event: Pilih Preset
+presetSelect.addEventListener('change', async () => {
+    const presetId = presetSelect.value;
+    
+    if (!presetId) return;
+    
+    try {
+        const result = await window.electronAPI.applyPreset(presetId);
+        
+        if (result.success) {
+            currentPresetId = presetId;
+            
+            // Update LUT display
+            if (result.preset.type === 'none') {
+                updateLUTDisplay(null);
+                addLogMessage('info', '⭕ No filter - Original colors');
+            } else {
+                updateLUTDisplay(`[Preset] ${result.preset.name}`);
+                
+                // Clear custom upload display when preset is selected
+                removeLUTBtn.disabled = false;
+            }
+            
+            // Show preview container if not "none"
+            if (result.preset.type !== 'none') {
+                previewContainer.style.display = 'block';
+                hasLUT = true;
+            } else {
+                if (!isMonitoring) {
+                    previewContainer.style.display = 'none';
+                }
+                hasLUT = false;
+            }
+        } else {
+            addLogMessage('error', `Failed to apply preset: ${result.message}`);
+        }
+    } catch (error) {
+        addLogMessage('error', `Error applying preset: ${error.message}`);
+    }
+});
+
 // Event: Pilih LUT
 selectLUTBtn.addEventListener('click', async () => {
     try {
@@ -251,6 +362,10 @@ selectLUTBtn.addEventListener('click', async () => {
         if (result.success) {
             updateLUTDisplay(result.lutName);
             addLogMessage('success', `LUT berhasil diupload: ${result.lutName}`);
+            
+            // Clear preset selection when custom upload
+            presetSelect.value = '';
+            currentPresetId = null;
         }
     } catch (error) {
         addLogMessage('error', `Error upload LUT: ${error.message}`);
@@ -259,7 +374,7 @@ selectLUTBtn.addEventListener('click', async () => {
 
 // Event: Hapus LUT
 removeLUTBtn.addEventListener('click', async () => {
-    if (!confirm('Apakah Anda yakin ingin menghapus LUT?')) {
+    if (!confirm('Apakah Anda yakin ingin menghapus filter?')) {
         return;
     }
     
@@ -269,10 +384,14 @@ removeLUTBtn.addEventListener('click', async () => {
         if (result.success) {
             updateLUTDisplay(null);
             updatePreview(null);
-            addLogMessage('info', 'LUT berhasil dihapus');
+            addLogMessage('info', 'Filter berhasil dihapus');
+            
+            // Reset preset select to "none"
+            presetSelect.value = 'none';
+            currentPresetId = 'none';
         }
     } catch (error) {
-        addLogMessage('error', `Error hapus LUT: ${error.message}`);
+        addLogMessage('error', `Error hapus filter: ${error.message}`);
     }
 });
 
@@ -381,7 +500,7 @@ async function generatePreviewForFile(filePath, fileName) {
         const result = await window.electronAPI.generatePreview(filePath);
         
         if (result.success) {
-            updatePreview(result.preview, fileName, result.hasLUT);
+            updatePreview(result.preview, fileName, result.hasLUT, result.hasXMP);
             currentPreviewPath = filePath;
         }
     } catch (error) {
@@ -397,6 +516,9 @@ window.electronAPI.onUpdateStats((data) => {
 // Load initial data saat aplikasi dibuka
 window.addEventListener('DOMContentLoaded', async () => {
     try {
+        // Load preset library
+        await loadPresetLibrary();
+        
         // Load stats
         const stats = await window.electronAPI.getStats();
         updateStats(stats.totalFiles, stats.uploadedCount, stats.queueSize);

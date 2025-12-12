@@ -17,7 +17,7 @@
             <h1>
                 Memora Photo Uploader
             </h1>
-            <p>Professional Auto Upload dengan LUT Color Grading</p>
+            <p>Professional Auto Upload dengan CUBE LUT & XMP Color Grading</p>
             <span class="status-badge status-inactive" id="statusBadge">
                 <span class="status-dot"></span>
                 Monitoring Tidak Aktif
@@ -59,13 +59,26 @@
                     </button>
                 </div>
 
-                <!-- LUT Filter Settings -->
+                <!-- Color Grading Settings -->
                 <div class="card">
-                    <h2><i class="fa-solid fa-palette"></i> LUT Color Grading</h2>
+                    <h2><i class="fa-solid fa-palette"></i> Color Grading</h2>
                     
+                    <!-- Preset Library -->
                     <div class="form-group">
-                        <label>LUT File (.cube)</label>
-                        <div class="folder-display empty" id="lutDisplay">Belum ada LUT dipilih</div>
+                        <label>Preset Library <span class="label-optional">(Built-in)</span></label>
+                        <select id="presetSelect" class="preset-select">
+                            <option value="">Loading presets...</option>
+                        </select>
+                    </div>
+
+                    <div class="divider">
+                        <span>OR</span>
+                    </div>
+                    
+                    <!-- Custom Upload -->
+                    <div class="form-group">
+                        <label>Custom Filter <span class="label-optional">(Upload Your Own)</span></label>
+                        <div class="folder-display empty" id="lutDisplay">Belum ada filter dipilih</div>
                         <div class="btn-group">
                             <button class="btn btn-primary" id="selectLUTBtn">
                                 <i class="fa-solid fa-file-import"></i> Upload
@@ -122,8 +135,8 @@
                     <div class="alert alert-info">
                         <i class="fa-solid fa-lightbulb"></i>
                         <div>
-                            <strong>🎨 LUT & Background Mode</strong>
-                            <p>Auto color grading. Berjalan di system tray.</p>
+                            <strong>🎨 Color Grading & Background Mode</strong>
+                            <p>Support CUBE LUT & XMP Presets. Berjalan di system tray.</p>
                         </div>
                     </div>
                     
@@ -139,8 +152,8 @@
                         <div class="info-item-compact">
                             <span class="info-badge">2</span>
                             <div>
-                                <strong>Upload LUT</strong>
-                                <p>File .cube untuk color grading (optional)</p>
+                                <strong>Upload Filter</strong>
+                                <p>CUBE (.cube) atau XMP Preset (.xmp) (optional)</p>
                             </div>
                         </div>
                         
@@ -163,7 +176,7 @@
 
                     <div class="tips-box-compact">
                         <strong><i class="fa-solid fa-star"></i> Tips:</strong>
-                        <p>Close = tray • LUT auto-filter • Preview live • Queue persistent • Format: JPG, PNG, GIF, WEBP</p>
+                        <p>Close = tray • CUBE/XMP auto-filter • Preview live • Queue persistent • Format: JPG, PNG, GIF, WEBP</p>
                     </div>
                 </div>
 
