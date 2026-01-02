@@ -42,6 +42,7 @@
       "main.js",
       "preload.js",
       "renderer.js",
+      "preview.html",
       "index.html",
       "style.css",
       "icon.png",

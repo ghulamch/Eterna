@@ -32,6 +32,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Get queue status
     getQueueStatus: () => ipcRenderer.invoke('get-queue-status'),
     
+    // Preview window operations
+    openPreview: () => ipcRenderer.invoke('open-preview'),
+    closePreview: () => ipcRenderer.invoke('close-preview'),
+    getUploadedPhotos: () => ipcRenderer.invoke('get-uploaded-photos'),
+    
     // Listen untuk log messages
     onLogMessage: (callback) => {
         ipcRenderer.on('log-message', (event, data) => callback(data));
@@ -40,5 +45,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Listen untuk update stats
     onUpdateStats: (callback) => {
         ipcRenderer.on('update-stats', (event, data) => callback(data));
+    },
+    
+    // Listen untuk photos data (preview window)
+    onPhotosData: (callback) => {
+        ipcRenderer.on('photos-data', (event, data) => callback(data));
+    },
+    
+    // Listen untuk new photo (preview window)
+    onNewPhoto: (callback) => {
+        ipcRenderer.on('new-photo', (event, data) => callback(data));
     }
 });

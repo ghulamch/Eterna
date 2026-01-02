@@ -128,6 +128,33 @@ body::before {
     50% { opacity: 0.6; }
 }
 
+.btn-preview {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 24px;
+    margin-top: 15px;
+    background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+    color: #000;
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: 'Inter', sans-serif;
+}
+
+.btn-preview:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(74, 222, 128, 0.4);
+}
+
+.btn-preview i {
+    font-size: 1.1rem;
+}
+
+
 /* Main Content - Dashboard Layout */
 .main-content {
     display: flex;
@@ -619,4 +646,153 @@ code {
 
 .card {
     animation: fadeIn 0.5s ease-out;
+}
+
+/* Additional CSS for App Settings Section */
+
+/* 4-column grid for settings */
+.settings-row-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+}
+
+/* Settings card special styling */
+.card-settings {
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(251, 146, 60, 0.05) 100%);
+    border: 1px solid rgba(251, 191, 36, 0.2);
+}
+
+.card-settings h2 {
+    color: #fbbf24;
+}
+
+/* Input with button */
+.input-with-btn {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.input-with-btn input {
+    flex: 1;
+}
+
+.btn-icon {
+    padding: 10px 16px;
+    min-width: auto;
+}
+
+/* Label hint */
+.label-hint {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-weight: 400;
+}
+
+/* Form hint */
+.form-hint {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.form-hint strong {
+    color: #fbbf24;
+    font-weight: 600;
+}
+
+/* Alert info compact */
+.alert-info-compact {
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin: 12px 0;
+    display: flex;
+    gap: 8px;
+    align-items: start;
+    font-size: 0.8rem;
+    background: rgba(96, 165, 250, 0.08);
+    border: 1px solid rgba(96, 165, 250, 0.2);
+}
+
+.alert-info-compact strong {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--info);
+    font-size: 0.85rem;
+}
+
+.alert-info-compact p {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    line-height: 1.3;
+    margin: 0;
+}
+
+/* Setting status */
+.setting-status {
+    margin-top: 12px;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.setting-status.success {
+    background: rgba(74, 222, 128, 0.1);
+    border: 1px solid rgba(74, 222, 128, 0.3);
+    color: var(--success);
+}
+
+.setting-status.error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: var(--error);
+}
+
+.setting-status.loading {
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    color: var(--warning);
+}
+
+/* Loading spinner */
+.spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Responsive adjustments */
+@media (max-width: 1400px) {
+    .settings-row-4 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .settings-row-4 {
+        grid-template-columns: 1fr;
+    }
+    
+    .input-with-btn {
+        flex-direction: column;
+    }
+    
+    .input-with-btn input,
+    .input-with-btn button {
+        width: 100%;
+    }
 }

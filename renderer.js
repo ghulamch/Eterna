@@ -8,6 +8,7 @@ let currentPresetId = null;
 
 // DOM Elements
 const selectFolderBtn = document.getElementById('selectFolderBtn');
+const openPreviewBtn = document.getElementById('openPreviewBtn');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const resetBtn = document.getElementById('resetBtn');
@@ -312,6 +313,21 @@ selectFolderBtn.addEventListener('click', async () => {
         addLogMessage('error', `Error memilih folder: ${error.message}`);
     }
 });
+
+// Event: Buka Preview Window
+openPreviewBtn.addEventListener('click', async () => {
+    try {
+        const result = await window.electronAPI.openPreview();
+        if (result.success) {
+            addLogMessage('info', '🖼️ Preview window dibuka');
+        } else {
+            addLogMessage('error', `Error membuka preview: ${result.message}`);
+        }
+    } catch (error) {
+        addLogMessage('error', `Error membuka preview: ${error.message}`);
+    }
+});
+
 
 // Event: Pilih Preset
 presetSelect.addEventListener('change', async () => {

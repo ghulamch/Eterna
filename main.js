@@ -21,6 +21,8 @@ const CONFIG = {
 
 // State
 let mainWindow;
+let previewWindow = null;
+let uploadedPhotos = []; // Track uploaded photos for preview
 let tray = null;
 let watcher = null;
 let uploadQueue = [];
@@ -1149,6 +1151,10 @@ async function uploadFile(filePath, retryCount = 0) {
         }
 
         sendLog('success', `✅ Upload berhasil: ${fileName}`);
+        
+        // Add to preview list
+        addPhotoToPreview(filePath, fileName);
+        
         updateStats();
         saveDatabase();
         
@@ -1327,6 +1333,44 @@ function createWindow() {
 
     mainWindow.on('closed', () => {
         mainWindow = null;
+    });
+}
+
+// Create Preview Window
+function createPreviewWindow() {
+    if (previewWindow) {
+        previewWindow.focus();
+        return;
+    }
+
+    previewWindow = new BrowserWindow({
+        width: 1920,
+        height: 1080,
+        fullscreen: false,
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js')
+        },
+        icon: path.join(__dirname, 'icon.png'),
+        backgroundColor: '#000000',
+        title: 'Memora Preview - Full Screen'
+    });
+
+    previewWindow.loadFile('preview.html');
+
+    // Auto maximize
+    previewWindow.maximize();
+
+    previewWindow.on('closed', () => {
+        previewWindow = null;
+    });
+
+    // Send initial photos data
+    previewWindow.webContents.on('did-finish-load', () => {
+        if (previewWindow) {
+            previewWindow.webContents.send('photos-data', uploadedPhotos);
+        }
     });
 }
 
@@ -1658,6 +1702,54 @@ ipcMain.handle('get-queue-status', async () => {
         currentSession: currentSessionCode
     };
 });
+
+// ============================================
+// PREVIEW WINDOW HANDLERS
+// ============================================
+
+// Open preview window
+ipcMain.handle('open-preview', async () => {
+    try {
+        createPreviewWindow();
+        return { success: true };
+    } catch (error) {
+        return { success: false, message: error.message };
+    }
+});
+
+// Close preview window
+ipcMain.handle('close-preview', async () => {
+    try {
+        if (previewWindow) {
+            previewWindow.close();
+            previewWindow = null;
+        }
+        return { success: true };
+    } catch (error) {
+        return { success: false, message: error.message };
+    }
+});
+
+// Get uploaded photos
+ipcMain.handle('get-uploaded-photos', async () => {
+    return uploadedPhotos;
+});
+
+// Helper function to add photo to preview list
+function addPhotoToPreview(photoPath, filename) {
+    const photoData = {
+        path: photoPath,
+        filename: filename,
+        timestamp: Date.now()
+    };
+    
+    uploadedPhotos.push(photoData);
+    
+    // Send to preview window if open
+    if (previewWindow && !previewWindow.isDestroyed()) {
+        previewWindow.webContents.send('new-photo', photoData);
+    }
+}
 
 // ============================================
 // APP LIFECYCLE
